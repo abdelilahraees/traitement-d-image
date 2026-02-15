@@ -3,11 +3,12 @@ import easyocr
 import re
 from datetime import datetime
 import google.generativeai as genai
+import os
+import gc  # Garbage Collector pour libérer la mémoire
 
 # --- CONFIGURATION IA ---
-# Remplacez par votre VRAIE clé si vous voulez tester l'IA
-API_KEY_GEMINI = "VOTRE_CLE_GEMINI_ICI"
-UTILISER_VRAIE_IA = False  # Mettre à True pour activer Gemini
+API_KEY_GEMINI = os.environ.get("API_KEY_GEMINI")
+UTILISER_VRAIE_IA = True if API_KEY_GEMINI else False
 
 if UTILISER_VRAIE_IA:
     try:
@@ -16,10 +17,10 @@ if UTILISER_VRAIE_IA:
     except:
         UTILISER_VRAIE_IA = False
 
-# Initialisation OCR (une seule fois au chargement)
-print("⏳ Chargement du modèle OCR...")
-reader = easyocr.Reader(['en'], gpu=False)
 
+# 🛑 ATTENTION : On NE charge PAS le reader ici (en global).
+# Si on le fait, l'appli plante au démarrage (OOM).
+# reader = easyocr.Reader(['en'], gpu=False) <--- SUPPRIMÉ
 
 def pre_traitement_image(image_path):
     img = cv2.imread(image_path)
@@ -30,19 +31,35 @@ def pre_traitement_image(image_path):
 
 
 def extraire_date_ocr(image_processed):
-    # Lecture OCR
-    resultats = reader.readtext(image_processed, detail=0)
-    texte_complet = " ".join(resultats)
-    texte_complet = texte_complet.replace('O', '0').replace('o', '0')
+    try:
+        # 🟢 CHARGEMENT À LA DEMANDE (LAZY LOADING)
+        # On charge le modèle uniquement maintenant
+        print("Chargement EasyOCR en mémoire...")
+        reader = easyocr.Reader(['en'], gpu=False, verbose=False)
 
-    # Regex
-    pattern_date = r"(\d{2})[./\-\s](\d{2})[./\-\s](\d{2,4})"
-    matches = re.findall(pattern_date, texte_complet)
+        # Lecture
+        resultats = reader.readtext(image_processed, detail=0)
+        texte_complet = " ".join(resultats)
 
-    if matches:
-        jour, mois, annee = matches[0]
-        if len(annee) == 2: annee = "20" + annee
-        return f"{jour}/{mois}/{annee}"
+        # 🔴 NETTOYAGE IMMÉDIAT
+        # On supprime le modèle de la RAM pour éviter le crash
+        del reader
+        gc.collect()  # On force le nettoyage de la RAM
+        print("Mémoire libérée.")
+
+        # Correction et Regex (inchangé)
+        texte_complet = texte_complet.replace('O', '0').replace('o', '0')
+        pattern_date = r"(\d{2})[./\-\s](\d{2})[./\-\s](\d{2,4})"
+        matches = re.findall(pattern_date, texte_complet)
+
+        if matches:
+            jour, mois, annee = matches[0]
+            if len(annee) == 2: annee = "20" + annee
+            return f"{jour}/{mois}/{annee}"
+
+    except Exception as e:
+        print(f"Erreur OCR: {e}")
+
     return None
 
 
@@ -64,23 +81,20 @@ def analyser_peremption(date_str):
 
 def consulter_ia(alerte, date):
     if not UTILISER_VRAIE_IA:
-        # Mock (Simulation)
-        if alerte == "orange": return "🤖 IA (Simu) : Faites une quiche ou un gratin ce soir !"
-        if alerte == "rouge": return "🤖 IA (Simu) : Risque bactérien élevé. Jetez le produit."
-        return "Pas de conseil nécessaire."
+        if alerte == "orange": return "🤖 IA (Simu) : Faites une quiche !"
+        if alerte == "rouge": return "🤖 IA (Simu) : Risque bactérien."
+        return "Pas de conseil."
 
-    # Vraie IA Gemini
     prompt = ""
     if alerte == "orange":
-        prompt = f"Un produit expire le {date}. Donne une idée de recette express anti-gaspillage."
+        prompt = f"Un produit expire le {date}. Recette express anti-gaspi. Court."
     elif alerte == "rouge":
-        prompt = f"Un produit est périmé depuis le {date}. Quels sont les risques ? Sois bref."
+        prompt = f"Un produit est périmé depuis le {date}. Risques sanitaires ? Court."
 
     if prompt:
         try:
             response = model.generate_content(prompt)
             return f"✨ Gemini : {response.text}"
-        except Exception as e:
-            return f"Erreur IA : {str(e)}"
-
+        except:
+            return "Erreur IA"
     return ""

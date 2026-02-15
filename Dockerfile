@@ -4,32 +4,27 @@ FROM python:3.10-slim
 # 2. Définir le dossier de travail
 WORKDIR /app
 
-# 3. Installer les dépendances système pour OpenCV (obligatoire)
-# CORRECTION ICI : Remplacement de libgl1-mesa-glx par libgl1
+# 3. Installer les dépendances système pour OpenCV
+# On utilise libgl1 au lieu de libgl1-mesa-glx pour éviter l'erreur Debian
 RUN apt-get update && apt-get install -y \
-    libglib2.0-0 \
+    libgl1 \
     libsm6 \
     libxext6 \
     libxrender-dev \
-    libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
-# 4. ASTUCE CRITIQUE : Installer PyTorch version CPU (très léger) AVANT le reste
-# Cela évite de télécharger la version GPU qui pèse 2Go
+# 4. ASTUCE CRITIQUE : Installer PyTorch CPU (léger) AVANT easyocr
 RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
-# 5. Installer EasyOCR maintenant (il utilisera le PyTorch CPU déjà installé)
-RUN pip install --no-cache-dir easyocr
-
-# 6. Copier et installer le reste des dépendances
+# 5. Installer le reste des dépendances
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 7. Copier tout le code du projet
+# 6. Copier le code
 COPY . .
 
-# 8. Créer le dossier uploads pour éviter les erreurs de permission
+# 7. Permissions uploads
 RUN mkdir -p uploads && chmod 777 uploads
 
-# 9. Lancer l'application
+# 8. Lancer
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
