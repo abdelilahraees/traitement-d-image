@@ -3,6 +3,6 @@ uvicorn
 python-multipart
 jinja2
 opencv-python-headless
-easyocr
 google-generativeai
 numpy
+# On retire easyocr d'ici pour le gérer dans le Dockerfile
