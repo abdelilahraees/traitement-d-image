@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Fridge AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+
+    <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg">
+        <h1 class="text-3xl font-bold text-center text-blue-600 mb-2">
+            <i class="fas fa-leaf"></i> Anti-Gaspi AI
+        </h1>
+        <p class="text-center text-gray-500 mb-6">Scanner Intelligent de DLC</p>
+
+        <div class="flex border-b mb-4">
+            <button onclick="switchTab('upload')" id="tabUpload" class="w-1/2 py-2 text-blue-600 border-b-2 border-blue-600 font-bold">
+                <i class="fas fa-upload"></i> Fichier
+            </button>
+            <button onclick="switchTab('camera')" id="tabCamera" class="w-1/2 py-2 text-gray-500">
+                <i class="fas fa-camera"></i> Webcam
+            </button>
+        </div>
+
+        <div id="uploadSection" class="mb-6">
+            <label class="block mb-2 text-sm font-medium text-gray-700">Photo du produit</label>
+            <input type="file" id="imageInput" accept="image/*"
+                   class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+        </div>
+
+        <div id="cameraSection" class="hidden mb-6 flex flex-col items-center">
+            <div class="relative w-full h-64 bg-black rounded-lg overflow-hidden mb-2">
+                <video id="videoFeed" autoplay playsinline class="w-full h-full object-cover"></video>
+                <canvas id="canvas" class="hidden"></canvas>
+            </div>
+            <button onclick="capturePhoto()" class="bg-gray-800 text-white px-4 py-2 rounded-full hover:bg-black transition">
+                <i class="fas fa-camera"></i> Prendre la photo
+            </button>
+            <img id="capturedImage" class="hidden w-full h-40 object-contain mt-2 border rounded" />
+        </div>
+
+        <button onclick="analyze()" id="btnScan"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 flex justify-center items-center gap-2">
+            <i class="fas fa-search"></i> Analyser l'image
+        </button>
+
+        <div id="resultCard" class="hidden mt-6 p-4 rounded-lg border-l-4">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-sm font-bold text-gray-500 uppercase">Date détectée</span>
+                <span id="dateDisplay" class="text-xl font-mono font-bold text-gray-800">--/--/----</span>
+            </div>
+
+            <div id="statusBox" class="p-3 rounded text-center font-bold text-white mb-4">
+                Statut inconnu
+            </div>
+
+            <div id="aiAdviceBox" class="bg-gray-50 p-3 rounded text-sm text-gray-700 italic border border-gray-200">
+                <i class="fas fa-robot text-purple-500 mr-2"></i> <span id="aiText">...</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentMode = 'upload'; // 'upload' ou 'camera'
+        let cameraStream = null;
+        let capturedBlob = null; // Pour stocker la photo prise
+
+        // --- GESTION DES ONGLETS ---
+        function switchTab(mode) {
+            currentMode = mode;
+            const uploadSec = document.getElementById('uploadSection');
+            const cameraSec = document.getElementById('cameraSection');
+            const tabUpload = document.getElementById('tabUpload');
+            const tabCamera = document.getElementById('tabCamera');
+
+            if (mode === 'upload') {
+                uploadSec.classList.remove('hidden');
+                cameraSec.classList.add('hidden');
+                tabUpload.className = "w-1/2 py-2 text-blue-600 border-b-2 border-blue-600 font-bold";
+                tabCamera.className = "w-1/2 py-2 text-gray-500";
+                stopCamera();
+            } else {
+                uploadSec.classList.add('hidden');
+                cameraSec.classList.remove('hidden');
+                tabUpload.className = "w-1/2 py-2 text-gray-500";
+                tabCamera.className = "w-1/2 py-2 text-blue-600 border-b-2 border-blue-600 font-bold";
+                startCamera();
+            }
+        }
+
+        // --- GESTION CAMERA ---
+        async function startCamera() {
+            try {
+                const video = document.getElementById('videoFeed');
+                // Demande l'accès à la caméra (arrière de préférence sur mobile)
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" }
+                });
+                video.srcObject = cameraStream;
+            } catch (err) {
+                alert("Erreur accès caméra : " + err);
+            }
+        }
+
+        function stopCamera() {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+        }
+
+        function capturePhoto() {
+            const video = document.getElementById('videoFeed');
+            const canvas = document.getElementById('canvas');
+            const imgPreview = document.getElementById('capturedImage');
+
+            // Dessiner la vidéo sur le canvas
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+
+            // Convertir en fichier image (Blob)
+            canvas.toBlob((blob) => {
+                capturedBlob = blob;
+                // Afficher la prévisualisation
+                imgPreview.src = URL.createObjectURL(blob);
+                imgPreview.classList.remove('hidden');
+            }, 'image/jpeg');
+        }
+
+        // --- ANALYSE ---
+        async function analyze() {
+            const fileInput = document.getElementById('imageInput');
+            const btn = document.getElementById('btnScan');
+            const card = document.getElementById('resultCard');
+            const formData = new FormData();
+
+            // Choix de la source selon le mode
+            if (currentMode === 'upload') {
+                if (fileInput.files.length === 0) {
+                    alert("Veuillez sélectionner un fichier !");
+                    return;
+                }
+                formData.append("file", fileInput.files[0]);
+            } else {
+                if (!capturedBlob) {
+                    alert("Veuillez prendre une photo d'abord !");
+                    return;
+                }
+                // On envoie le blob de la webcam comme un fichier nommé "webcam.jpg"
+                formData.append("file", capturedBlob, "webcam.jpg");
+            }
+
+            // UI Chargement
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyse en cours...';
+            btn.disabled = true;
+            card.classList.add('hidden');
+
+            try {
+                const response = await fetch("/analyze", {
+                    method: "POST",
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    // Afficher les résultats
+                    document.getElementById('dateDisplay').innerText = data.date;
+                    const statusBox = document.getElementById('statusBox');
+                    statusBox.innerText = data.statut;
+
+                    // Couleurs
+                    statusBox.className = "p-3 rounded text-center font-bold text-white mb-4";
+                    if (data.couleur === 'vert') statusBox.classList.add('bg-green-500');
+                    else if (data.couleur === 'orange') statusBox.classList.add('bg-orange-500');
+                    else if (data.couleur === 'rouge') statusBox.classList.add('bg-red-500');
+
+                    // IA
+                    document.getElementById('aiAdviceBox').classList.remove('hidden');
+                    document.getElementById('aiText').innerText = data.conseil;
+
+                    card.classList.remove('hidden');
+                    card.className = "mt-6 p-4 rounded-lg border-l-4 shadow-md bg-white border-" + (data.couleur === 'vert' ? 'green' : data.couleur === 'orange' ? 'orange' : 'red') + "-500";
+                } else {
+                    alert("Erreur : " + data.message);
+                }
+            } catch (error) {
+                console.error(error);
+                alert("Erreur serveur.");
+            } finally {
+                btn.innerHTML = '<i class="fas fa-search"></i> Analyser l\'image';
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
