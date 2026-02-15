@@ -1,9 +1,6 @@
 .git
 .venv
-venv
-__pycache__
 dataset
 images-all
 uploads
-.idea
-.vscode
+__pycache__
