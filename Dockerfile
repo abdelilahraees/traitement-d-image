@@ -5,15 +5,17 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # 3. Installer les dépendances système pour OpenCV (obligatoire)
+# CORRECTION ICI : Remplacement de libgl1-mesa-glx par libgl1
 RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender-dev \
-    libgl1-mesa-glx \
+    libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
-# 4. ASTUCE CRITIQUE : Tout sur une seule ligne ici !
+# 4. ASTUCE CRITIQUE : Installer PyTorch version CPU (très léger) AVANT le reste
+# Cela évite de télécharger la version GPU qui pèse 2Go
 RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 # 5. Installer EasyOCR maintenant (il utilisera le PyTorch CPU déjà installé)
