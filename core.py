@@ -6,7 +6,7 @@ import google.generativeai as genai
 
 # --- CONFIGURATION IA ---
 # Remplacez par votre VRAIE clé si vous voulez tester l'IA
-API_KEY_GEMINI = "VOTRE_CLE_GEMINI_ICI"
+API_KEY_GEMINI = "AIzaSyAhbKekkBFPUgDR0pSrM6dogU8ECWEU4Gk"
 UTILISER_VRAIE_IA = False  # Mettre à True pour activer Gemini
 
 if UTILISER_VRAIE_IA:
